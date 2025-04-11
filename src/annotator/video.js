@@ -9,6 +9,36 @@ import { EffectManager } from "./video-effects.js";
 import { TatorSimpleVideo } from "./video-simple.js";
 import { guiFPS } from "./guiFPS.js";
 
+export async function getVideoDurationFromUrl(url) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.src = url;
+    video.preload = 'metadata';
+
+    // Needed to prevent it from trying to autoplay
+    video.muted = true;
+    video.playsInline = true;
+
+    video.onloadedmetadata = () => {
+      // Firefox bug fix — load event can fire before duration is available
+      if (video.duration === Infinity) {
+        video.currentTime = 1e101;
+        video.ontimeupdate = () => {
+          video.ontimeupdate = null;
+          resolve(video.duration);
+          video.currentTime = 0;
+        };
+      } else {
+        resolve(video.duration);
+      }
+    };
+
+    video.onerror = (e) => {
+      reject(new Error('Failed to load video metadata'));
+    };
+  });
+}
+
 async function pingServerWithTimeout(url, timeout = 50) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -721,8 +751,8 @@ export class VideoCanvas extends AnnotationCanvas {
 
     if (play_idx == -1)
     {
-      videoUrl = "/media/" + videoObject.file;
-      dims = [videoObject.width,videoObject.height];
+      let videoUrl = "/media/" + videoObject.file;
+      let dims = [videoObject.width,videoObject.height];
       console.warn("Using old access method!");
       streaming_files = [{"path": "/media/" + videoObject.file,
                           "resolution": [videoObject.height,videoObject.width]}];
@@ -777,7 +807,18 @@ export class VideoCanvas extends AnnotationCanvas {
     if (this._dispFrame >= videoObject.num_frames - 1) {
       this._dispFrame = videoObject.num_frames - 2;
     }
-    this._numFrames = videoObject.num_frames;
+
+    console.log(`Getting duration from url ${videoObject.media_files.streaming[0].path}`)
+    getVideoDurationFromUrl(videoObject.media_files.streaming[0].path).then((duration) => {
+        this._numSeconds = duration;
+        this._numFrames = Math.round(duration * videoObject.fps);
+        console.log(`===>Video length: ${this._numSeconds} seconds (${this._numFrames} frames)`);
+    }
+    ).catch((error) => {
+      console.error("Error getting video duration:", error);
+      this._numSeconds = 1;
+      this._numFrames = 1;
+    });
 
     // If summary level is not set, grab it from the media's default.
     if (this._summaryLevel == null)
@@ -1015,13 +1056,15 @@ export class VideoCanvas extends AnnotationCanvas {
     let newStreamingFiles = [];
     for (let idx = 0; idx < streaming_files.length; idx++)
     {
+      console.log(`2 Number of streaming files: ${idx} ${JSON.stringify(streaming_files[idx])}`);
+      console.log(`2 Number of streaming files: ${idx} ${streaming_files[idx].resolution[0]}`);
       let resolution = streaming_files[idx].resolution[0];
       if (byResolution[resolution] == undefined)
       {
         byResolution[resolution] = [];
       }
 
-      if (streaming_files[idx].path && streaming_files[idx].segment_info)
+      if (streaming_files[idx].path && streaming_files[idx].segment_info || streaming_files[idx].reference_only)
       {
         byResolution[resolution].push(streaming_files[idx]);
       }
@@ -1041,8 +1084,9 @@ export class VideoCanvas extends AnnotationCanvas {
         let reference_idx = -1;
         for (let idx = 0; idx < resolutionFiles.length; idx++)
         {
-          if (resolutionFiles[idx].reference_only)
+          if (resolutionFiles[idx].reference_only == 1)
           {
+            console.log(`3 Reference only}`);
             reference_idx = idx;
             break;
           }
@@ -1117,7 +1161,14 @@ export class VideoCanvas extends AnnotationCanvas {
     }
 
     let count = this._videoElement.length;
-    if (this._videoElement[0]._compat)
+    // if (streaming_files[0].reference_only) {
+    //     this._onDemandPlaybackReady = true;
+    //
+    //   // Increase GPU buffer to ensure smoother playback
+    //   this._draw.jumboBufferMode();
+    // }
+
+    if (this._videoElement[0]._compat || streaming_files[0].reference_only)
     {
       this.addEventListener("downloaderReady", (evt) => {
         // Once all files are ready notify playback as ready.
@@ -1146,7 +1197,7 @@ export class VideoCanvas extends AnnotationCanvas {
     // Clear the buffer in case this is a hot-swap
     this._draw.clear();
 
-    console.info(`Video dimensions = ${dims}`);
+    console.info(`=====>Video dimensions = ${dims}`);
 
     // Resize the viewport
     this._draw.resizeViewport(dims[0], dims[1]);

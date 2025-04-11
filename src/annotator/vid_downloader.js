@@ -586,7 +586,6 @@ class VideoDownloader
                            "blockSize": iterBlockSize,
                            "startByte": startByte,
                            "downloadTime": Date.now(),
-                           "startByte": startByte,
                            "frameStart": start_frame};
 
                   postMessage(data, []);
