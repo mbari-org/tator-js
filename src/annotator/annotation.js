@@ -2295,6 +2295,38 @@ export class AnnotationCanvas extends HTMLElement
     return resizeType;
   }
 
+  /**
+   * Generate a color from a string hash
+   * @param {string} str - The string to hash
+   * @returns {string} - A color in RGB format
+   */
+  _hashToColor(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    // Generate RGB values using different parts of the hash
+    // Use modulo to ensure values are in valid RGB range (0-255)
+    const r = Math.abs(hash) % 256;
+    const g = Math.abs(hash * 31) % 256;
+    const b = Math.abs(hash * 127) % 256;
+    // Ensure minimum brightness for visibility on dark backgrounds (150-255 range)
+    const minBrightness = 150;
+    const rAdjusted = Math.max(r, minBrightness);
+    const gAdjusted = Math.max(g, minBrightness);
+    const bAdjusted = Math.max(b, minBrightness);
+    return `rgb(${rAdjusted}, ${gAdjusted}, ${bAdjusted})`;
+  }
+
+  /**
+   * Convert RGB array to RGB string format
+   * @param {Array<number>} rgbArray - RGB array [r, g, b]
+   * @returns {string} - RGB string format "rgb(r, g, b)"
+   */
+  _rgbArrayToRgbString(rgbArray) {
+    return `rgb(${rgbArray[0]}, ${rgbArray[1]}, ${rgbArray[2]})`;
+  }
+
   computeLocalizationColor(localization, meta)
   {
     // Default fill is fill
@@ -5027,20 +5059,25 @@ export class AnnotationCanvas extends HTMLElement
               // Offset label slightly above the box
               labelY = Math.max(0.02, labelY - 0.015);
 
+              // Convert localization color (RGB array) to RGB string for text color
+              let labelColor = this._hashToColor(labelText);
+              console.log('[Box Label] localization.color:', localization.color, 'labelColor:', labelColor, 'labelText:', labelText);
+
               // Add the text label
+              const labelStyle = {
+                fontSize: '10pt',
+                color: labelColor,
+                background: 'rgba(0,0,0,0.7)',
+                padding: '2px 6px',
+                borderRadius: '3px',
+                whiteSpace: 'nowrap'
+              };
+              console.log('[Box Label] labelStyle:', labelStyle);
               this._textOverlay.addText(
                 labelX,
                 labelY,
                 labelText,
-                {
-                  fontSize: '12pt',
-                  fontWeight: 'bold',
-                  color: 'white',
-                  background: 'rgba(0,0,0,0.7)',
-                  padding: '2px 6px',
-                  borderRadius: '3px',
-                  whiteSpace: 'nowrap'
-                },
+                labelStyle,
                 "localization-labels"
               );
             }
@@ -5070,19 +5107,24 @@ export class AnnotationCanvas extends HTMLElement
               let labelY = line[0][1] / drawContext.clientHeight;
               labelY = Math.max(0.02, labelY - 0.015);
 
+              // Convert localization color (RGB array) to RGB string for text color
+              let labelColor = this._hashToColor(labelText);
+              console.log('[Line Label] localization.color:', localization.color, 'labelColor:', labelColor, 'labelText:', labelText);
+
+              const labelStyle = {
+                fontSize: '10pt',
+                color: labelColor,
+                background: 'rgba(0,0,0,0.7)',
+                padding: '2px 6px',
+                borderRadius: '3px',
+                whiteSpace: 'nowrap'
+              };
+              console.log('[Line Label] labelStyle:', labelStyle);
               this._textOverlay.addText(
                 labelX,
                 labelY,
                 labelText,
-                {
-                  fontSize: '12pt',
-                  fontWeight: 'bold',
-                  color: 'white',
-                  background: 'rgba(0,0,0,0.7)',
-                  padding: '2px 6px',
-                  borderRadius: '3px',
-                  whiteSpace: 'nowrap'
-                },
+                labelStyle,
                 "localization-labels"
               );
             }
@@ -5109,19 +5151,24 @@ export class AnnotationCanvas extends HTMLElement
               let labelY = center[1] / drawContext.clientHeight;
               labelY = Math.max(0.02, labelY - 0.015);
 
+              // Convert localization color (RGB array) to RGB string for text color
+              let labelColor = this._hashToColor(labelText);
+              console.log('[Dot Label] localization.color:', localization.color, 'labelColor:', labelColor, 'labelText:', labelText);
+
+              const labelStyle = {
+                fontSize: '10pt',
+                color: labelColor,
+                background: 'rgba(0,0,0,0.7)',
+                padding: '2px 6px',
+                borderRadius: '3px',
+                whiteSpace: 'nowrap'
+              };
+              console.log('[Dot Label] labelStyle:', labelStyle);
               this._textOverlay.addText(
                 labelX,
                 labelY,
                 labelText,
-                {
-                  fontSize: '12pt',
-                  fontWeight: 'bold',
-                  color: 'white',
-                  background: 'rgba(0,0,0,0.7)',
-                  padding: '2px 6px',
-                  borderRadius: '3px',
-                  whiteSpace: 'nowrap'
-                },
+                labelStyle,
                 "localization-labels"
               );
             }
