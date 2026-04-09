@@ -152,6 +152,42 @@ var State = {PLAYING: 0, IDLE: 1, LOADING: -1};
 export var RATE_CUTOFF_FOR_ON_DEMAND = 4.0;
 const RATE_CUTOFF_FOR_AUDIO = 4.0;
 
+/** Beyond this duration (seconds), default play quality is lowered to ease bandwidth. */
+const LONG_VIDEO_PLAY_QUALITY_THRESHOLD_SEC = 300; // 5 minutes
+const DEFAULT_PLAY_QUALITY_SHORT_SEC = 720;
+const DEFAULT_PLAY_QUALITY_LONG_SEC = 480;
+
+/**
+ * Duration in seconds from API metadata, or NaN if unknown.
+ */
+function mediaDurationSecondsFromMetadata(videoObject) {
+  if (!videoObject || videoObject.num_frames == null || videoObject.fps == null) {
+    return NaN;
+  }
+  const fps = Number(videoObject.fps);
+  if (!Number.isFinite(fps) || fps <= 0) {
+    return NaN;
+  }
+  const sec = videoObject.num_frames / fps;
+  return Number.isFinite(sec) && sec > 0 ? sec : NaN;
+}
+
+/**
+ * Picks default play quality (vertical resolution target) from duration.
+ * Long clips default to 480p cap; short clips keep 720. Explicit quality is capped at 480 for long clips.
+ */
+function resolvePlayQualityForDuration(quality, durationSec) {
+  const long =
+    Number.isFinite(durationSec) && durationSec > LONG_VIDEO_PLAY_QUALITY_THRESHOLD_SEC;
+  if (quality == undefined || quality == null) {
+    return long ? DEFAULT_PLAY_QUALITY_LONG_SEC : DEFAULT_PLAY_QUALITY_SHORT_SEC;
+  }
+  if (long) {
+    return Math.min(quality, DEFAULT_PLAY_QUALITY_LONG_SEC);
+  }
+  return quality;
+}
+
 export class VideoCanvas extends AnnotationCanvas {
   constructor() {
     super();
@@ -857,7 +893,7 @@ export class VideoCanvas extends AnnotationCanvas {
                         let new_length = 0;
                         let streaming_files=[];
 
-                        // If quality is not supplied default to 720 or highest available
+                        // If quality is not supplied default to 720 (short) or 480 (long); cap long clips at 480.
                         let resolutions = this._children[0].media_files["streaming"].length;
                         this._maxHeight = 0;
                         for (let idx = 0; idx < resolutions; idx++)
@@ -868,10 +904,21 @@ export class VideoCanvas extends AnnotationCanvas {
                             this._maxHeight = height;
                           }
                         }
-                        if (quality == undefined || quality == null)
+                        for (let idx = 0; idx < this._children.length; idx++)
                         {
-                          quality = 720;
+                          if (idx + 1 < this._children.length)
+                          {
+                            new_length += (videoObject.media_files.concat[idx+1].timestampOffset-videoObject.media_files.concat[idx].timestampOffset)*this._children[idx].fps;
+                          }
+                          else
+                          {
+                            new_length += this._children[idx].num_frames;
+                          }
                         }
+                        const concatFps = this._children[0].fps;
+                        const concatDurationSec =
+                          concatFps > 0 ? new_length / concatFps : NaN;
+                        quality = resolvePlayQualityForDuration(quality, concatDurationSec);
                         quality = Math.min(quality, this._maxHeight);
                         if (resizeHandler == undefined)
                         {
@@ -884,14 +931,6 @@ export class VideoCanvas extends AnnotationCanvas {
 
                         for (let idx = 0; idx < this._children.length; idx++)
                         {
-                          if (idx + 1 < this._children.length)
-                          {
-                            new_length += (videoObject.media_files.concat[idx+1].timestampOffset-videoObject.media_files.concat[idx].timestampOffset)*this._children[idx].fps;
-                          }
-                          else
-                          {
-                            new_length += this._children[idx].num_frames;
-                          }
                           streaming_files.push(this._children[idx].media_files.streaming);
                         }
                         this._numFrames = new_length;
@@ -948,7 +987,7 @@ export class VideoCanvas extends AnnotationCanvas {
                        {composed: true, detail: {media: videoObject}}));
 
 
-    // If quality is not supplied default to 720 or highest available
+    // If quality is not supplied default to 720 (short) or 480 (long); cap long clips at 480.
     let resolutions = videoObject.media_files["streaming"].length;
     this._maxHeight = 0;
     for (let idx = 0; idx < resolutions; idx++)
@@ -959,10 +998,8 @@ export class VideoCanvas extends AnnotationCanvas {
         this._maxHeight = height;
       }
     }
-    if (quality == undefined || quality == null)
-    {
-      quality = 720;
-    }
+    const durationSec = mediaDurationSecondsFromMetadata(videoObject);
+    quality = resolvePlayQualityForDuration(quality, durationSec);
     quality = Math.min(quality, this._maxHeight);
     if (resizeHandler == undefined)
     {
