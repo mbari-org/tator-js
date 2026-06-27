@@ -618,10 +618,21 @@ export class VideoCanvas extends AnnotationCanvas {
     return this._videoElement[this._scrub_idx].utilityBuffer;
   }
 
+  scrubFramePreviewSupported()
+  {
+    const buffer = this._videoElement[this._scrub_idx]?._buffer;
+    return typeof buffer?.get_frame_synchronously === "function";
+  }
+
   async getScrubFrame(frame)
   {
+    const buffer = this._videoElement[this._scrub_idx]?._buffer;
+    if (typeof buffer?.get_frame_synchronously !== "function")
+    {
+      return null;
+    }
     var scrub_time_comps = this.frameToComps(frame, this._scrub_idx);
-    return await this._videoElement[this._scrub_idx]._buffer.get_frame_synchronously(scrub_time_comps.time+scrub_time_comps.bias);
+    return await buffer.get_frame_synchronously(scrub_time_comps.time+scrub_time_comps.bias);
   }
 
   construct_demuxer(idx, resolution)
